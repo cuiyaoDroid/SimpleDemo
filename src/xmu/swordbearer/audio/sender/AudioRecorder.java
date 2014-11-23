@@ -11,7 +11,7 @@ public class AudioRecorder implements Runnable {
 	private boolean isRecording = false;
 	private AudioRecord audioRecord;
 
-	private static final int BUFFER_FRAME_SIZE = 480;
+	private static final int BUFFER_FRAME_SIZE = 320;
 	private int audioBufSize = 0;
 
 	//

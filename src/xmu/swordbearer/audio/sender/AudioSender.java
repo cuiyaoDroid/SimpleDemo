@@ -55,7 +55,7 @@ public class AudioSender implements Runnable {
 //			dataPacket.setData(data);
 //			Log.e(LOG, "发送一段数据 " + data.length);
 //			socket.send(dataPacket);
-			
+			Log.i("sendData", size+"");
 			boolean send=HCNetSDK.getInstance()
 					.NET_DVR_VoiceComSendData(DemoActivity.m_iLogID, data, size);
 			Log.i("HCNetSDK.getInstance().NET_DVR_VoiceComSendData",send+"");

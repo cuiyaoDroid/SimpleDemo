@@ -4,6 +4,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.test.demo.G711;
+
 import xmu.swordbearer.audio.AudioCodec;
 import xmu.swordbearer.audio.data.AudioData;
 import android.util.Log;
@@ -77,8 +79,9 @@ public class AudioDecoder implements Runnable {
 				decodedData = new byte[MAX_BUFFER_SIZE];
 				byte[] data = encodedData.getRealData();
 				//
-				decodeSize = AudioCodec.audio_decode(data, 0,
-						encodedData.getSize(), decodedData, 0);
+				decodeSize = G711.decode(data, 0, encodedData.getSize(), decodedData);
+//				decodeSize = AudioCodec.audio_decode(data, 0,
+//						encodedData.getSize(), decodedData, 0);
 				Log.e(LOG, "解码一次 " + data.length + " 解码后的长度 " + decodeSize);
 				if (decodeSize > 0) {
 					// add decoded audio to player
