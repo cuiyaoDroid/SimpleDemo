@@ -8,6 +8,7 @@
 */
 package com.test.demo;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 
@@ -16,9 +17,14 @@ import org.MediaPlayer.PlayM4.Player;
 import xmu.swordbearer.audio.AudioWrapper;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Service;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -30,8 +36,17 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnTouchListener;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.SeekBar.OnSeekBarChangeListener;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.ZoomControls;
 
 import com.hikvision.netsdk.ExceptionCallBack;
 import com.hikvision.netsdk.HCNetSDK;
@@ -61,6 +76,15 @@ import com.hikvision.netsdk.VoiceDataCallBack;
 
 public class DemoActivity extends Activity implements Callback
 {
+	
+	private void createPath(String path) {
+		File file = new File(path);
+		if (!file.exists()) {
+			file.mkdir();
+		}
+	}
+	public static final String appPath = Environment
+			.getExternalStorageDirectory() + "/fch_pic/";
 	private Player 			m_oPlayerSDK			= null;
 	private Button          m_oLoginBtn         	= null;
 	private Button          m_oPreviewBtn           = null;
@@ -68,7 +92,6 @@ public class DemoActivity extends Activity implements Callback
 	private Button			m_oParamCfgBtn			= null;
 	private Button			m_oCaptureBtn			= null;
 	private Button			m_oRecordBtn			= null;
-	private	ImageButton		m_oSoundBtn				= null;
 	private	Button			m_oPTZBtn				= null;
 	private Button			m_oPresetBtn			= null;
 	private SurfaceView 	m_osurfaceView			= null;
@@ -80,7 +103,7 @@ public class DemoActivity extends Activity implements Callback
 	private NET_DVR_DEVICEINFO_V30 m_oNetDvrDeviceInfoV30 = null;
 	
 	private	int 			iFirstChannelNo 		= -1;				// get start channel no
-	public static int				m_iLogID				= -1;				// return by NET_DVR_Login_v30
+	public static int		m_iLogID				= -1;				// return by NET_DVR_Login_v30
 	private int 			m_iPlayID				= -1;				// return by NET_DVR_RealPlay_V30
 	private int				m_iPlaybackID			= -1;				// return by NET_DVR_PlayBackByTime	
 	private int				m_iPort					= -1;				// play port
@@ -100,15 +123,47 @@ public class DemoActivity extends Activity implements Callback
 	AudioManager audio;
 	
 	
-	private AudioWrapper audioWrapper;
+	private ImageButton ctrl_1;
+	private ImageButton ctrl_2;
+	private ImageButton ctrl_3;
+	private ImageButton ctrl_4;
 	
+	private ImageButton ctrl_top;
+	private ImageButton ctrl_left;
+	private ImageButton ctrl_right;
+	private ImageButton ctrl_bottom;
+	
+	private ImageButton ctrl_mid;
+	private ZoomControls mZoomControls;
+	
+	private ImageButton imgbtn_Sound;
+	
+	private SeekBar mSeekBar;
+	private CheckBox speak_chect;
+	
+	private LinearLayout definition_btn;
+	private TextView definition_txt;
+	private ImageButton refresh_btn;
+	private ImageButton camera_btn;
+	private ImageButton position_btn;
+	
+	private AudioWrapper audioWrapper;
+	private LinearLayout right_layout;
+	private int channel = 1;
     /** Called when the activity is first created. */
+	private PowerManager pm;
+	private PowerManager.WakeLock mWakeLock;
     @Override
     public void onCreate(Bundle savedInstanceState) 
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
         
+        pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        mWakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My Tag"); 
+        audio = (AudioManager) getSystemService(Service.AUDIO_SERVICE);
+        
+        setContentView(R.layout.main);
+        createPath(appPath);
         if (!initeSdk())
         {
         	this.finish();
@@ -120,22 +175,25 @@ public class DemoActivity extends Activity implements Callback
         	this.finish();
         	return;
         }
-        audio = (AudioManager) getSystemService(Service.AUDIO_SERVICE);
+        
         m_oIPAddr.setText(IP);
         m_oPort.setText(PORT);
         m_oUser.setText(USER);
         m_oPsd.setText(PASSWORD);
+        audioWrapper = AudioWrapper.getInstance();
         m_osurfaceView.post(new Runnable() {
 			
 			@Override
 			public void run() {
 				// TODO Auto-generated method stub
 				login();
-			    startPreview();
+				if(m_iPlayID > 0){
+					stopPlay();
+				}
+				startPreview(1);
+//			    switchSound(true);
 			}
 		});
-        audioWrapper = AudioWrapper.getInstance();
-        
     }
     //@Override    
     public void surfaceCreated(SurfaceHolder holder) {  
@@ -149,7 +207,8 @@ public class DemoActivity extends Activity implements Callback
         	if (false == m_oPlayerSDK.setVideoWindow(m_iPort, 0, holder)) {	
         		Log.e(TAG, "Player setVideoWindow failed!");
         	}	
-    	}        
+    	}      
+        
     }       
         
     //@Override  
@@ -217,13 +276,14 @@ public class DemoActivity extends Activity implements Callback
     protected void onResume() {
     	// TODO Auto-generated method stub
     	super.onResume();
-    	
+    	mWakeLock.acquire(); 
     }
     @Override
     protected void onPause() {
     	// TODO Auto-generated method stub
     	super.onPause();
     	
+        mWakeLock.release();
     }
     @Override
     protected void onDestroy() {
@@ -254,7 +314,6 @@ public class DemoActivity extends Activity implements Callback
     	m_oParamCfgBtn = (Button) findViewById(R.id.btn_ParamCfg);
     	m_oCaptureBtn = (Button) findViewById(R.id.btn_Capture);
     	m_oRecordBtn = (Button) findViewById(R.id.btn_Record);
-    	m_oSoundBtn = (ImageButton) findViewById(R.id.imgbtn_Sound);
     	m_oPTZBtn = (Button) findViewById(R.id.btn_PTZ);
     	m_oPresetBtn = (Button) findViewById(R.id.btn_PRESET);
     	m_osurfaceView = (SurfaceView) findViewById(R.id.Sur_Player);    	
@@ -262,6 +321,31 @@ public class DemoActivity extends Activity implements Callback
     	m_oPort = (EditText) findViewById(R.id.EDT_Port);
     	m_oUser = (EditText) findViewById(R.id.EDT_User);
     	m_oPsd = (EditText) findViewById(R.id.EDT_Psd);
+    	ctrl_1 = (ImageButton) findViewById(R.id.ctrl_1);
+    	ctrl_2 = (ImageButton) findViewById(R.id.ctrl_2);
+    	ctrl_3 = (ImageButton) findViewById(R.id.ctrl_3);
+    	ctrl_4 = (ImageButton) findViewById(R.id.ctrl_4);
+    	
+    	ctrl_top = (ImageButton) findViewById(R.id.ctrl_top);
+    	ctrl_left = (ImageButton) findViewById(R.id.ctrl_left);
+    	ctrl_right = (ImageButton) findViewById(R.id.ctrl_right);
+    	ctrl_bottom = (ImageButton) findViewById(R.id.ctrl_bottom);
+    	
+    	ctrl_mid = (ImageButton) findViewById(R.id.ctrl_mid);
+    	mZoomControls = (ZoomControls) findViewById(R.id.zoomControls);
+    	
+    	imgbtn_Sound = (ImageButton) findViewById(R.id.imgbtn_sound);
+    	
+    	mSeekBar = (SeekBar) findViewById(R.id.sound_seek);
+    	speak_chect = (CheckBox) findViewById(R.id.speak_chect);
+    	
+    	definition_btn = (LinearLayout) findViewById(R.id.definition_btn);
+    	definition_txt = (TextView) findViewById(R.id.definition_txt);
+    	refresh_btn = (ImageButton)findViewById(R.id.refresh_btn);
+    	camera_btn = (ImageButton)findViewById(R.id.camera_btn);
+    	position_btn = (ImageButton)findViewById(R.id.position_btn);
+    	
+    	right_layout = (LinearLayout)findViewById(R.id.right_layout);
     }
     
     // listen
@@ -273,10 +357,75 @@ public class DemoActivity extends Activity implements Callback
     	m_oParamCfgBtn.setOnClickListener(ParamCfg_Listener);
     	m_oCaptureBtn.setOnClickListener(Capture_Listener);
     	m_oRecordBtn.setOnClickListener(Record_Listener);
-    	m_oSoundBtn.setOnClickListener(Sound_Listener);
     	m_oPresetBtn.setOnClickListener(Preset_Listener);
     	m_oPTZBtn.setOnTouchListener(PTZ_Listener);
+    	
+    	refresh_btn.setOnClickListener(Preview_Listener);
+    	camera_btn.setOnClickListener(Capture_Listener);
+    	mSeekBar.setMax(audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+    	mSeekBar.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
+    	mSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
+			@Override
+			public void onStopTrackingTouch(SeekBar seekBar) {
+				// TODO Auto-generated method stub
+			}
+			@Override
+			public void onStartTrackingTouch(SeekBar seekBar) {
+				// TODO Auto-generated method stub
+			}
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress,
+					boolean fromUser) {
+				// TODO Auto-generated method stub
+				audio.setStreamVolume(AudioManager.STREAM_MUSIC, progress
+						, AudioManager.FLAG_PLAY_SOUND);
+			}
+		});
+    	speak_chect.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				// TODO Auto-generated method stub
+				if(isChecked){
+					audioWrapper.startRecord();
+				}else{
+					audioWrapper.stopRecord();
+				}
+			}
+		});
+    	definition_btn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO Auto-generated method stub
+				ShowDialog(new String[]{"高清","标清"});
+			}
+		});
+    	position_btn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO Auto-generated method stub
+				if(right_layout.getVisibility()==View.VISIBLE){
+					right_layout.setVisibility(View.GONE);
+				}else{
+					right_layout.setVisibility(View.VISIBLE);
+				}
+						
+			}
+		});
     }
+    private void ShowDialog(final String[] content) {
+		AlertDialog.Builder builder = new AlertDialog.Builder(
+				DemoActivity.this);
+		builder.setItems(content, new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				refreshChannel(which);
+			}
+		});
+		builder.create().show();
+	}
     //ptz listener
     private Button.OnTouchListener PTZ_Listener = new OnTouchListener()
     {
@@ -396,10 +545,10 @@ public class DemoActivity extends Activity implements Callback
     {
     	public void onClick(View v)
     	{  
-    		switchSound();
+    		//switchSound(true);
     	}
     };
-    private void switchSound(){
+    private void switchSound(boolean open){
     	
     	try
 		{
@@ -408,7 +557,7 @@ public class DemoActivity extends Activity implements Callback
 				Log.e(TAG, "please start preview first");
 				return;
 			}
-			if(m_bSoundOn == false)
+			if(m_bSoundOn == false&&open)
 			{
 				if(!m_oPlayerSDK.playSound(m_iPort))
 				{
@@ -418,7 +567,7 @@ public class DemoActivity extends Activity implements Callback
 				Log.e(TAG, "playSound" );
 				m_bSoundOn = true;
 			}
-			else
+			else if(!open&&m_bSoundOn)
 			{
 				if(!m_oPlayerSDK.stopSound())
 				{
@@ -500,7 +649,8 @@ public class DemoActivity extends Activity implements Callback
     		    
     		    SimpleDateFormat   sDateFormat   =   new   SimpleDateFormat("yyyy-MM-dd-hh:mm:ss");     
     		    String   date   =   sDateFormat.format(new   java.util.Date());  
-    		    FileOutputStream file = new FileOutputStream("/mnt/sdcard/" + date + ".bmp");
+    		    FileOutputStream file = new FileOutputStream(appPath + date + ".bmp");
+    		    Toast.makeText(getApplicationContext(), "已保存在SD卡的xianzhi_pic目录下", Toast.LENGTH_LONG).show();
     		    file.write(picBuf, 0, stSize.value);
     		    file.close();
     		}
@@ -617,8 +767,8 @@ public class DemoActivity extends Activity implements Callback
 	private void login(){
 		try
 		{
-			if(m_iLogID < 0)
-			{
+//			if(m_iLogID < 0)
+//			{
 				// login on the device
 				m_iLogID = loginDevice();
 				if (m_iLogID < 0)
@@ -652,20 +802,20 @@ public class DemoActivity extends Activity implements Callback
 							}
 						});
 				Log.i("HCNetSDK.getInstance().NET_DVR_StartVoiceCom_MR_V30",code+"");
-		    	audioWrapper.startRecord();
-			}
-			else
-			{
-				// whether we have logout
-				if (!HCNetSDK.getInstance().NET_DVR_Logout_V30(m_iLogID))
-				{
-					Log.e(TAG, " NET_DVR_Logout is failed!");
-					return;
-				}
-				
-				m_oLoginBtn.setText("Login");
-				m_iLogID = -1;
-			}		
+//		    	audioWrapper.startRecord();
+//			}
+//			else
+//			{
+//				// whether we have logout
+//				if (!HCNetSDK.getInstance().NET_DVR_Logout_V30(m_iLogID))
+//				{
+//					Log.e(TAG, " NET_DVR_Logout is failed!");
+//					return;
+//				}
+//				
+//				m_oLoginBtn.setText("Login");
+//				m_iLogID = -1;
+//			}		
 		} 
 		catch (Exception err)
 		{
@@ -678,19 +828,39 @@ public class DemoActivity extends Activity implements Callback
 	{
 		public void onClick(View v) 
 		{
-			startPreview();
+			if(m_iLogID<0){
+				// whether we have logout
+				login();
+			}	
+			
+			if(m_iPlayID < 0){
+				startPreview(channel);
+			}
+			
 		}
 	};
-	private void startPreview(){
+	private void refreshChannel(int channel){
+		this.channel = channel; 
+		if(m_iLogID<0){
+			// whether we have logout
+			login();
+		}	
+		if(m_iPlayID > 0){
+			//stopPlay();
+		}
+		startPreview(channel);
+		definition_txt.setText(channel==0?"高清":"标清");
+	}
+	private void startPreview(int channel){
 		try
 		{
-			if(m_iLogID < 0)
-			{
-				Log.e(TAG,"please login on device first");
-				return ;
-			}
-			if(m_iPlayID < 0)
-			{	
+//			if(m_iLogID < 0)
+//			{
+//				Log.e(TAG,"please login on device first");
+//				return ;
+//			}
+//			if(m_iPlayID < 0)
+//			{	
 				if(m_iPlaybackID >= 0)
 				{
 					Log.i(TAG, "Please stop palyback first");
@@ -725,7 +895,7 @@ public class DemoActivity extends Activity implements Callback
 				
 				NET_DVR_CLIENTINFO ClientInfo = new NET_DVR_CLIENTINFO();
 		        ClientInfo.lChannel =  iFirstChannelNo; 	// start channel no + preview channel
-		        ClientInfo.lLinkMode = 1<<31;  			// bit 31 -- 0,main stream;1,sub stream
+		        ClientInfo.lLinkMode = channel<<31;  			// bit 31 -- 0,main stream;1,sub stream
 		        ClientInfo.sMultiCastIP = null;
 		        
 				// net sdk start preview
@@ -737,14 +907,13 @@ public class DemoActivity extends Activity implements Callback
 				}
 				
 				Log.i(TAG, "NetSdk Play sucess ***********************3***************************");
-									
 				m_oPreviewBtn.setText("Stop");
-			}
-			else
-			{
-				stopPlay();
-				m_oPreviewBtn.setText("Preview");
-			}				
+//			}
+//			else
+//			{
+//				stopPlay();
+//				m_oPreviewBtn.setText("Preview");
+//			}				
 		} 
 		catch (Exception err)
 		{
@@ -1004,10 +1173,14 @@ public class DemoActivity extends Activity implements Callback
 	    	if (!m_oPlayerSDK.inputData(m_iPort, pDataBuffer, iDataSize))
     		{
     			Log.e(TAG, "inputData failed with: " + m_oPlayerSDK.getLastError(m_iPort));
-    		}	 
+    		}	
+	    	if(!m_bSoundOn){
+	    		Log.i(TAG, "switchSound======================");
+	    		switchSound(true);
+	    	}
 	    }
 	}
-		
+	
 	/** 
      * @fn Cleanup
      * @author zhuzhenlei
@@ -1033,7 +1206,7 @@ public class DemoActivity extends Activity implements Callback
          switch (keyCode)
          {
          case KeyEvent.KEYCODE_BACK:
-        	 	finish();
+        	  finish();
         	  
               break;
          case KeyEvent.KEYCODE_VOLUME_UP:
@@ -1041,15 +1214,19 @@ public class DemoActivity extends Activity implements Callback
                  AudioManager.STREAM_MUSIC,
                  AudioManager.ADJUST_RAISE,
                  AudioManager.FLAG_PLAY_SOUND | AudioManager.FLAG_SHOW_UI);
+             mSeekBar.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
+             
              return true;
          case KeyEvent.KEYCODE_VOLUME_DOWN:
              audio.adjustStreamVolume(
                  AudioManager.STREAM_MUSIC,
                  AudioManager.ADJUST_LOWER,
                  AudioManager.FLAG_PLAY_SOUND | AudioManager.FLAG_SHOW_UI);
+             mSeekBar.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
              return true;
          default:
               break;
+              
          }
      
          return true;
