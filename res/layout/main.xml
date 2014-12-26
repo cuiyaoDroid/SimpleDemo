@@ -180,8 +180,8 @@
         android:gravity="center_vertical"
         android:orientation="horizontal" >
 
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <RelativeLayout
+            android:layout_width="120dp"
             android:layout_height="30dp"
             android:layout_marginLeft="10dp"
             android:background="@drawable/bg_sound"
@@ -196,15 +196,25 @@
                 android:background="@null"
                 android:padding="5dp"
                 android:scaleType="centerInside"
-                android:src="@drawable/btn_voice" />
+                android:src="@drawable/btn_voice_sel" />
 
             <SeekBar
                 android:id="@+id/sound_seek"
                 android:layout_width="match_parent"
                 android:layout_height="30dp"
                 android:layout_weight="1"
+                android:layout_toRightOf="@+id/imgbtn_sound"
                 android:progressDrawable="@null" />
-        </LinearLayout>
+            <ImageView
+                android:id="@+id/sound_close"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/icon_voice_no"
+                android:layout_marginLeft="10dp"
+                android:layout_marginBottom="5dp"
+                android:visibility="gone"
+                android:layout_alignBottom="@+id/imgbtn_sound" />
+        </RelativeLayout>
 
         <CheckBox
             android:id="@+id/speak_chect"
